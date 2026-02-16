@@ -1,53 +1,54 @@
-WildFly Log Analyzer with LLM Integration
+# WildFly Log Analyzer with LLM Integration
 
 A Python & FastAPI project to parse WildFly logs, extract ERROR-level entries, perform Top N analysis, and leverage LLMs for automated root cause analysis.
 
-🚀 Project Overview
+# 🚀 Project Overview
 
 This project allows you to upload WildFly .log files, automatically extract and analyze errors, and get concise, actionable insights powered by a large language model (LLM). It’s designed for backend engineers, DevOps, and SRE teams who want to speed up troubleshooting and root cause identification.
 
-🛠 Features
+# 🛠 Features
 
-Log Parsing & Preprocessing
+1. Log Parsing & Preprocessing
 
-Extracts log entries at ERROR level.
+    - Extracts log entries at ERROR level.
+   
+    - Deduplicates repeated messages.
+   
+    - Counts occurrences for all errors.
+   
+    - Handles large log files efficiently with streaming reads.
 
-Deduplicates repeated messages.
+3. Top N Error Analysis
 
-Counts occurrences for all errors.
+    - Sorts errors by occurrence.
+    
+    - Selects the Top N most frequent errors (configurable via API).
+    
+    - Passes Top N errors to an LLM for root cause analysis and exact solutions.
 
-Handles large log files efficiently with streaming reads.
+3. LLM Integration
 
-Top N Error Analysis
+    - Uses OpenAI GPT-4.1 to analyze errors.
+    
+    - Generates concise technical explanations and actionable fixes.
+    
 
-Sorts errors by occurrence.
+4. FastAPI Web Interface
 
-Selects the Top N most frequent errors (configurable via API).
+    - Upload logs via REST API.
+    
+    - Returns a structured JSON with:
+    
+        - Top N errors + LLM analysis.
+     
+        - Full sorted count of all errors.
+    
+    - Flexible top_n parameter to control number of errors analyzed.
 
-Passes Top N errors to an LLM for root cause analysis and exact solutions.
+5. Additional Utilities
 
-LLM Integration
+    - Text summarization, keyword extraction, and title generation for general documents.
+    
+    - Modular architecture for easy extension of analysis tools.
 
-Uses OpenAI GPT-4.1 to analyze errors.
-
-Generates concise technical explanations and actionable fixes.
-
-Supports multiple languages (English and Chinese).
-
-FastAPI Web Interface
-
-Upload logs via REST API.
-
-Returns a structured JSON with:
-
-Top N errors + LLM analysis.
-
-Full sorted count of all errors.
-
-Flexible top_n parameter to control number of errors analyzed.
-
-Additional Utilities
-
-Text summarization, keyword extraction, and title generation for general documents.
-
-Modular architecture for easy extension of analysis tools.
+    - Supports multiple languages (English and Chinese).
