@@ -3,10 +3,6 @@ from openai import OpenAI
 import jieba
 import re
 
-# 实际功能实现的地方，比如：文本摘要、关键词提取、标题生成 → 主要业务逻辑写这里
-
-#  client = OpenAI(api_key=os.getenv("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"))
-#  export OPENAI_API_KEY="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"
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def summarize_text(text: str) -> str:
@@ -16,12 +12,12 @@ def summarize_text(text: str) -> str:
 
 
 def llm_summarize(text:str) -> str:
-    # GPT 摘要
+    # GPT summary
     if not text.strip():
         return "No text provided!"
 
     try:
-        response = client.chat.completions.create(model="gpt-4o-mini",
+        response = client.chat.completions.create(model="gpt-4.1",
         messages=[
             {"role": "system", "content": "You are a helpful assistant that summarizes text."},
             {"role": "user", "content": f"Summarize the following text:\n\n{text}"}
@@ -33,12 +29,12 @@ def llm_summarize(text:str) -> str:
     except Exception as e:
         return f"An error occurred: {e}"
 
-# 中文/英文 关键词抽取    
+# Chinese/English keyword extraction   
 def extract_keywords(text: str) -> str:
     if not text.split():
         return "No text provided!"
 
-    # 检查是否包含中文
+    # Check if the text contains Chinese characters
     if re.search(r'[\u4e00-\u9fff]',text):
         words = jieba.lcut(text)
         keywords = [w for w in words if len(w)>1]
@@ -46,34 +42,73 @@ def extract_keywords(text: str) -> str:
         words = text.split()
         keywords = [w for w in words if len(w)>4]
 
-#     unique_words = set(words).  ??? + why 4?
-#    keywords = [word for word in words if len(word) > 4]
-
     return " ".join(keywords) if keywords else "No keywords found."
 
-# GPT 生成标题
+# GPT Title generation (Chinese/English)
 def generate_title(text: str) -> str:
     if not text.strip():
         return "无标题" if re.search(r'[\u4e00-\u9fff]',text) else "No text provided!"
 
-    # 检查是否包含中文
     if re.search(r'[\u4e00-\u9fff]',text):
         words = jieba.lcut(text)
         return "".join(words[:5]) + "..." if words else "无标题"
     else:
         words = text.split()
         return " ".join(words[:5]) + "..." if words else "No title"
-  
 
-    # try:
-    #     response = client.chat.completions.create(model="gpt-4o-mini",
-    #     messages=[
-    #         {"role": "system", "content": "You are a helpful assistant that generates titles."},
-    #         {"role": "user", "content": f"Generate a concise title for the following text:\n\n{text}"}
-    #     ],
-    #     max_tokens=20)
-    #     title = response.choices[0].message.content.strip()
-    #     return title
+# ---------- Handle Error——JSON ----------
+MAX_MSG_LEN = 200
+MAX_TOKENS = 200 
 
-    # except Exception as e:
-    #     return f"An error occurred: {e}"
+def analyze_errors_with_llm(errors_json: dict, top_n: int = 3) -> dict:
+    sorted_errors = sorted(errors_json.get("unique_errors", []),
+                           key=lambda x: x["count"], reverse=True)
+    top_errors = sorted_errors[:top_n]
+
+    if not top_errors:
+        return {"top_errors_with_solution": [], "all_errors_counts_sorted": {}}
+
+    analyzed_top_errors = []
+
+    for idx, e in enumerate(top_errors, start=1):
+        msg_preview = e["message"][:MAX_MSG_LEN]
+        batch_text = f"[{e['timestamp']}] [{e['module']}] [{e['thread']}] (occurred {e['count']} times) {msg_preview}"
+
+        try:
+            # call LLM to analyze this error and provide solution
+            response = client.chat.completions.create(
+                model="gpt-4.1",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Senior Java engineer. Analyze WildFly/JBoss errors. "
+                            "Provide concise and exact solution based on message content."
+                        )
+                    },
+                    {"role": "user", "content": f"Analyze this error:\n{batch_text}"}
+                ],
+                max_tokens=MAX_TOKENS,
+            )
+            solution = response.choices[0].message.content.strip()
+        except Exception as ex:
+            solution = f"LLM call failed: {ex}"
+
+        analyzed_top_errors.append({
+            "rank": idx,
+            "count": e["count"],
+            "timestamp": e["timestamp"],
+            "module": e["module"],
+            "thread": e["thread"],
+            "message": e["message"],
+            "solution": solution
+        })
+
+    counts_sorted = dict(sorted(errors_json.get("counts", {}).items(),
+                                key=lambda item: item[1], reverse=True))
+
+    return {
+        "top_errors_with_solution": analyzed_top_errors,
+        "all_errors_counts_sorted": counts_sorted
+    }
+

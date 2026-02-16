@@ -1,6 +1,7 @@
 import json
 import re
 from pathlib import Path
+from collections import Counter
 
 LOG_LINE_PATTERN = re.compile(
     r'^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) '
@@ -10,20 +11,20 @@ LOG_LINE_PATTERN = re.compile(
     r'(?P<message>.+)$'
 )
 
-# 先把log文件解析成json，方便后续分析和处理
+# Serialize log line into structured dict
 def parse_log_line(line: str) -> dict:
     match = LOG_LINE_PATTERN.match(line)
     if match:
         return match.groupdict()
     return None
 
-# 以防止log文件过大，导致内存问题，可以考虑分批次读取和处理
-def preprocess_log_file(file_path: str, levels=("Failed", "WARN", "ERROR")) -> list:
+# Filter log lines by level and return structured data 
+def preprocess_log_file(file_path: str, levels=("Failed", "WARN", "ERROR")) -> list[dict]:
     results = []
     path = Path(file_path)
     if not path.is_file():
-        raise (f"File not found: {file_path}")
-        return results
+        raise FileNotFoundError(f"File not found: {file_path}")
+        
     with path.open( 'r', encoding='utf-8', errors='ignore') as f:
         for line in f:
             parsed = parse_log_line(line.strip())
@@ -31,19 +32,37 @@ def preprocess_log_file(file_path: str, levels=("Failed", "WARN", "ERROR")) -> l
                 results.append(parsed)
     return results
 
-def extract_errors(file_path: str) -> list:
-    return preprocess_log_file(file_path, levels=("ERROR"))
+# Extract Error, remove repetitive errors, count occurrences
+def extract_errors(file_path: str) -> dict:
+    errors = preprocess_log_file(file_path, levels=("ERROR",))
+    if not errors:
+        return {"unique_errors": [], "counts": {}}
+    
+    msg_counter = Counter()
+    first_occurrence = {}  
+    for e in errors:
+        msg = e["message"]
+        msg_counter[msg] += 1
+        if msg not in first_occurrence:
+            first_occurrence[msg] = {
+                "timestamp": e.get("timestamp", ""),
+                "module": e.get("module", ""),
+                "thread": e.get("thread", "")
+            }
+        
+    unique_errors = []
+    for msg, count in msg_counter.items():
+        info = first_occurrence[msg]
+        unique_errors.append({
+            "count": count,
+            "timestamp": info["timestamp"],
+            "module": info["module"],
+            "thread": info["thread"],
+            "message": msg
+        })
+
+    return {"unique_errors": unique_errors, "counts": dict(msg_counter)}
 
 def save_to_json(data: list, output_file: str):
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-
-
-
-# 1. path import失败，怎么添加
-# 2. 第一个parse_log_line函数，正则表达式的匹配规则是什么？是不是针对不同log可以写不同的处理方式？
-# 3. 这里的file_path是什么？我们不是打算用upload吗？
-# 4. parsed("levels")有什么作用？
-# 5. raise 和 print的区别是什么？
-# 6. pending，自己多加一个warn + failed
-
